@@ -1,7 +1,5 @@
-pub mod entities;
 pub mod errors;
-pub mod repositories;
+pub mod post;
 
-pub use entities::Post;
 pub use errors::DomainError;
-pub use repositories::PostRepository;
+pub use post::{Post, PostRepository};

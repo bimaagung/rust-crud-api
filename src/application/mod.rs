@@ -1,5 +1,3 @@
-pub mod dtos;
-pub mod use_cases;
+pub mod post;
 
-pub use dtos::{CreatePostDto, UpdatePostDto};
-pub use use_cases::PostUseCase;
+pub use post::{CreatePostDto, PostUseCase, UpdatePostDto};

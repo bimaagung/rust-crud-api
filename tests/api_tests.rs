@@ -4,10 +4,9 @@ use http_body_util::BodyExt;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
-use rust_crud::application::use_cases::PostUseCase;
-use rust_crud::domain::entities::Post;
+use rust_crud::application::post::PostUseCase;
 use rust_crud::domain::errors::DomainError;
-use rust_crud::domain::repositories::PostRepository;
+use rust_crud::domain::post::{Post, PostRepository};
 use rust_crud::presentation::http::{AppState, create_routes};
 
 #[derive(Default)]

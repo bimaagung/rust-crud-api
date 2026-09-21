@@ -1,32 +1,43 @@
 use std::sync::Arc;
 
-use crate::application::dtos::{CreatePostDto, UpdatePostDto};
-use crate::domain::entities::Post;
+use crate::application::post::dtos::{CreatePostDto, UpdatePostDto};
 use crate::domain::errors::DomainError;
-use crate::domain::repositories::PostRepository;
+use crate::domain::post::entity::Post;
+use crate::domain::post::repository::PostRepository;
 
+// Service/Use Case layer — Go equivalent: type PostService struct { repo domain.PostRepository }
+// Business logic lives here; it calls the repository interface, never the DB directly.
 #[derive(Clone)]
 pub struct PostUseCase {
-    repository: Arc<dyn PostRepository>,
+    repository: Arc<dyn PostRepository>, // Go: repo domain.PostRepository (injected via constructor)
 }
 
 impl PostUseCase {
+    // Go equivalent: func NewPostService(repo domain.PostRepository) *PostService
     pub fn new(repository: Arc<dyn PostRepository>) -> Self {
         Self { repository }
     }
 
+    // Go: func (s *PostService) GetAllPosts(ctx) ([]Post, error)
     pub async fn get_all_posts(&self) -> Result<Vec<Post>, DomainError> {
-        self.repository.find_all().await
+        match self.repository.find_all().await {
+            Ok(posts) => Ok(posts),
+            Err(err)  => Err(err),
+        }
     }
 
+    // Go: func (s *PostService) GetPostByID(ctx, id int) (Post, error)
     pub async fn get_post_by_id(&self, id: i32) -> Result<Post, DomainError> {
-        self.repository
-            .find_by_id(id)
-            .await?
-            .ok_or_else(|| DomainError::NotFound("Data not found".into()))
+        match self.repository.find_by_id(id).await {
+            Ok(Some(post)) => Ok(post),                                          // Go: return post, nil
+            Ok(None)       => Err(DomainError::NotFound("Data not found".into())), // Go: return nil, ErrNotFound
+            Err(err)       => Err(err),                                          // Go: return nil, err
+        }
     }
 
+    // Go: func (s *PostService) CreatePost(ctx, param CreatePostParam) (Post, error)
     pub async fn create_post(&self, dto: CreatePostDto) -> Result<Post, DomainError> {
+        // Business rule validation — Go: if title == "" { return nil, ErrValidation }
         if dto.title.trim().is_empty() {
             return Err(DomainError::Validation("Title cannot be empty".into()));
         }
@@ -34,23 +45,33 @@ impl PostUseCase {
             return Err(DomainError::Validation("Body cannot be empty".into()));
         }
 
-        self.repository.create(dto.title, dto.body).await
+        match self.repository.create(dto.title, dto.body).await {
+            Ok(post) => Ok(post),  // Go: return post, nil
+            Err(err) => Err(err),  // Go: return nil, err
+        }
     }
 
+    // Go: func (s *PostService) UpdatePost(ctx, id int, param UpdatePostParam) (Post, error)
     pub async fn update_post(&self, id: i32, dto: UpdatePostDto) -> Result<Post, DomainError> {
+        // Reject if all fields are None — Go: if param.Title == nil && param.Body == nil { return ErrValidation }
         if dto.title.is_none() && dto.body.is_none() && dto.published.is_none() {
             return Err(DomainError::Validation(
                 "At least one field must be provided to update".into(),
             ));
         }
 
-        self.repository
-            .update(id, dto.title, dto.body, dto.published)
-            .await
+        match self.repository.update(id, dto.title, dto.body, dto.published).await {
+            Ok(post) => Ok(post),  // Go: return post, nil
+            Err(err) => Err(err),  // Go: return nil, err
+        }
     }
 
+    // Go: func (s *PostService) DeletePost(ctx, id int) error
     pub async fn delete_post(&self, id: i32) -> Result<(), DomainError> {
-        self.repository.delete(id).await
+        match self.repository.delete(id).await {
+            Ok(())   => Ok(()),    // Go: return nil
+            Err(err) => Err(err),  // Go: return err
+        }
     }
 }
 
@@ -59,9 +80,10 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
+    // Mock implementation of PostRepository — Go equivalent: a test struct that implements the interface
     #[derive(Default)]
     struct MockPostRepository {
-        posts: Mutex<Vec<Post>>,
+        posts: Mutex<Vec<Post>>, // in-memory store; Go: posts []domain.Post protected by sync.Mutex
     }
 
     #[async_trait::async_trait]
@@ -97,15 +119,9 @@ mod tests {
         ) -> Result<Post, DomainError> {
             let mut posts = self.posts.lock().unwrap();
             if let Some(p) = posts.iter_mut().find(|p| p.id == id) {
-                if let Some(t) = title {
-                    p.title = t;
-                }
-                if let Some(b) = body {
-                    p.body = b;
-                }
-                if let Some(pub_status) = published {
-                    p.published = pub_status;
-                }
+                if let Some(t) = title { p.title = t; }
+                if let Some(b) = body { p.body = b; }
+                if let Some(pub_status) = published { p.published = pub_status; }
                 Ok(p.clone())
             } else {
                 Err(DomainError::NotFound("Data not found".into()))
@@ -117,10 +133,7 @@ mod tests {
             let initial_len = posts.len();
             posts.retain(|p| p.id != id);
             if posts.len() == initial_len {
-                Err(DomainError::NotFound(format!(
-                    "Post with id {} not found",
-                    id
-                )))
+                Err(DomainError::NotFound(format!("Post with id {} not found", id)))
             } else {
                 Ok(())
             }
@@ -133,10 +146,7 @@ mod tests {
         let use_case = PostUseCase::new(repo);
 
         let result = use_case
-            .create_post(CreatePostDto {
-                title: "Test Title".into(),
-                body: "Test Body".into(),
-            })
+            .create_post(CreatePostDto { title: "Test Title".into(), body: "Test Body".into() })
             .await;
 
         assert!(result.is_ok());
@@ -153,10 +163,7 @@ mod tests {
         let use_case = PostUseCase::new(repo);
 
         let err = use_case
-            .create_post(CreatePostDto {
-                title: "   ".into(),
-                body: "Test Body".into(),
-            })
+            .create_post(CreatePostDto { title: "   ".into(), body: "Test Body".into() })
             .await
             .unwrap_err();
 
@@ -169,10 +176,7 @@ mod tests {
         let use_case = PostUseCase::new(repo);
 
         let created = use_case
-            .create_post(CreatePostDto {
-                title: "Post 1".into(),
-                body: "Content 1".into(),
-            })
+            .create_post(CreatePostDto { title: "Post 1".into(), body: "Content 1".into() })
             .await
             .unwrap();
 
@@ -192,21 +196,14 @@ mod tests {
         let use_case = PostUseCase::new(repo);
 
         let created = use_case
-            .create_post(CreatePostDto {
-                title: "Original".into(),
-                body: "Original Body".into(),
-            })
+            .create_post(CreatePostDto { title: "Original".into(), body: "Original Body".into() })
             .await
             .unwrap();
 
         let updated = use_case
             .update_post(
                 created.id,
-                UpdatePostDto {
-                    title: Some("Updated".into()),
-                    body: None,
-                    published: Some(true),
-                },
+                UpdatePostDto { title: Some("Updated".into()), body: None, published: Some(true) },
             )
             .await
             .unwrap();
@@ -222,10 +219,7 @@ mod tests {
         let use_case = PostUseCase::new(repo);
 
         let created = use_case
-            .create_post(CreatePostDto {
-                title: "To Delete".into(),
-                body: "Content".into(),
-            })
+            .create_post(CreatePostDto { title: "To Delete".into(), body: "Content".into() })
             .await
             .unwrap();
 

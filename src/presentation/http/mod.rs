@@ -1,8 +1,8 @@
-pub mod dtos;
 pub mod errors;
-pub mod handlers;
+pub mod post;
 pub mod routes;
 pub mod state;
 
+pub use errors::HttpError;
 pub use routes::create_routes;
 pub use state::AppState;

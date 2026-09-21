@@ -81,29 +81,40 @@ rust-crud/
 │   ├── config.rs                     # Environment configuration loader
 │   ├── domain/                       # Core business layer
 │   │   ├── mod.rs
-│   │   ├── entities.rs               # Pure Post entity
-│   │   ├── repositories.rs           # PostRepository trait interface
-│   │   └── errors.rs                 # DomainError enum
+│   │   ├── errors.rs                 # DomainError enum
+│   │   └── post/                     # Post domain module
+│   │       ├── mod.rs
+│   │       ├── entity.rs             # Pure Post entity
+│   │       └── repository.rs         # PostRepository trait interface
 │   ├── application/                  # Use cases and orchestration
 │   │   ├── mod.rs
-│   │   ├── dtos.rs                   # CreatePostDto, UpdatePostDto
-│   │   └── use_cases.rs              # PostUseCase implementation & unit tests
+│   │   └── post/                     # Post application module
+│   │       ├── mod.rs
+│   │       ├── dtos.rs               # CreatePostDto, UpdatePostDto
+│   │       └── use_case.rs           # PostUseCase implementation & unit tests
 │   ├── infrastructure/               # External drivers and adapters
 │   │   ├── mod.rs
 │   │   └── database/
 │   │       ├── mod.rs
 │   │       ├── connection.rs         # SeaORM connection pool initialization
 │   │       ├── entities/             # SeaORM ActiveModel / Model definitions
+│   │       │   ├── mod.rs
+│   │       │   └── post.rs
 │   │       └── repositories/         # SeaOrmPostRepository implementation
+│   │           ├── mod.rs
+│   │           └── seaorm_post_repository.rs
 │   └── presentation/                 # Presentation / HTTP interface
 │       ├── mod.rs
 │       └── http/
 │           ├── mod.rs
-│           ├── dtos.rs               # HTTP request payloads
 │           ├── errors.rs             # Axum IntoResponse error mapper
-│           ├── handlers.rs           # Axum request handlers
-│           ├── routes.rs             # Axum Router definition
-│           └── state.rs              # Axum AppState dependency injection
+│           ├── routes.rs             # Axum Router definition (nesting feature routers)
+│           ├── state.rs              # Axum AppState dependency injection
+│           └── post/                 # Post HTTP presentation module
+│               ├── mod.rs
+│               ├── dtos.rs           # Post HTTP request payloads
+│               ├── handlers.rs       # Post request handlers
+│               └── routes.rs         # Post sub-router definition
 └── tests/
     └── api_tests.rs                  # End-to-end Axum API integration tests
 ```
