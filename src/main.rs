@@ -1,30 +1,43 @@
-use actix_web::{App, HttpServer, middleware::Logger, web};
-use dotenvy::dotenv;
-use std::env;
+use std::sync::Arc;
+use tower_http::trace::TraceLayer;
+use tracing::info;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-pub mod db;
-pub mod errors;
-pub mod handlers;
-pub mod models;
-pub mod schema;
+use rust_crud::application::use_cases::PostUseCase;
+use rust_crud::config::Config;
+use rust_crud::domain::repositories::PostRepository;
+use rust_crud::infrastructure::database::connection::init_pool;
+use rust_crud::infrastructure::database::repositories::SeaOrmPostRepository;
+use rust_crud::presentation::http::AppState;
+use rust_crud::presentation::http::create_routes;
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    dotenv().ok();
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "rust_crud=info,tower_http=info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let pool = db::init_pool(&database_url);
+    let config = Config::load();
 
-    log::info!("Server running at http://127.0.0.1:8000");
+    info!("Connecting to database...");
+    let db = init_pool(&config.database_url).await?;
+    info!("Database connection established");
 
-    HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default())
-            .app_data(web::Data::new(pool.clone()))
-            .service(web::scope("/api").configure(handlers::init_routes))
-    })
-    .bind(("127.0.0.1", 8080))?
-    .run()
-    .await
+    let post_repository: Arc<dyn PostRepository> = Arc::new(SeaOrmPostRepository::new(db));
+    let post_use_case = Arc::new(PostUseCase::new(post_repository));
+
+    let app_state = AppState { post_use_case };
+    let app = create_routes(app_state).layer(TraceLayer::new_for_http());
+
+    let bind_addr = format!("{}:{}", config.server_host, config.server_port);
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    info!("Server running at http://{}", bind_addr);
+
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }
